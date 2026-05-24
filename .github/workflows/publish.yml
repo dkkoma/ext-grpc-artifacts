@@ -54,7 +54,7 @@ env:
 jobs:
   publish:
     name: grpc ${{ matrix.grpc-version }} / php ${{ matrix.php-version }} / ${{ matrix.arch }} / ${{ matrix.profile }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +89,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        if: steps.filter.outputs.should_run == 'true' && matrix.arch == 'arm64'
+        if: steps.filter.outputs.should_run == 'true' && matrix.arch == 'arm64' && runner.arch != 'ARM64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -121,4 +121,3 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ matrix.grpc-version }}-php${{ matrix.php-version }}-${{ env.DISTRO }}-${{ matrix.arch }}-${{ matrix.profile }}
           cache-from: type=gha,scope=${{ matrix.grpc-version }}-php${{ matrix.php-version }}-${{ env.DISTRO }}-${{ matrix.arch }}-${{ matrix.profile }}
           cache-to: type=gha,mode=max,scope=${{ matrix.grpc-version }}-php${{ matrix.php-version }}-${{ env.DISTRO }}-${{ matrix.arch }}-${{ matrix.profile }}
-
