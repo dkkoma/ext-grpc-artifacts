@@ -34,7 +34,7 @@ on:
         options:
           - all
           - pecl
-          - optimized
+          - optimized-amd64-skylake
       force:
         description: Rebuild and push even when the target tag already exists.
         required: true
@@ -79,14 +79,16 @@ jobs:
 
           php_versions=("8.4" "8.5")
           arches=("amd64" "arm64")
-          profiles=("pecl" "optimized")
-
           matrix='{"include":[]}'
           for grpc_version in "${grpc_versions[@]}"; do
             for php_version in "${php_versions[@]}"; do
               [[ "${php_input}" == "all" || "${php_input}" == "${php_version}" ]] || continue
               for arch in "${arches[@]}"; do
                 [[ "${arch_input}" == "all" || "${arch_input}" == "${arch}" ]] || continue
+                profiles=("pecl")
+                if [[ "${arch}" == "amd64" ]]; then
+                  profiles+=("optimized-amd64-skylake")
+                fi
                 for profile in "${profiles[@]}"; do
                   [[ "${profile_input}" == "all" || "${profile_input}" == "${profile}" ]] || continue
                   matrix="$(

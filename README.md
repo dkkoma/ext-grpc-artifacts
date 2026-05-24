@@ -20,9 +20,8 @@ Examples:
 
 ```text
 ghcr.io/dkkoma/ext-grpc-artifacts:1.58.0-php8.4-trixie-amd64-pecl
-ghcr.io/dkkoma/ext-grpc-artifacts:1.58.0-php8.4-trixie-amd64-optimized
+ghcr.io/dkkoma/ext-grpc-artifacts:1.58.0-php8.4-trixie-amd64-optimized-amd64-skylake
 ghcr.io/dkkoma/ext-grpc-artifacts:1.80.0-php8.5-trixie-arm64-pecl
-ghcr.io/dkkoma/ext-grpc-artifacts:1.80.0-php8.5-trixie-arm64-optimized
 ```
 
 ## Artifact contents
@@ -48,12 +47,14 @@ The manually tracked backfill matrix in `versions.json` is:
 | PHP | `8.4`, `8.5` |
 | Distro | `trixie` |
 | Architecture | `amd64`, `arm64` |
-| Profile | `pecl`, `optimized` |
+| Profile | `pecl`, `optimized-amd64-skylake` for `amd64` only |
 
 Profiles:
 
-- `pecl`: standard `pecl install grpc-${GRPC_VERSION}` build using the PHP image toolchain.
-- `optimized`: `gcc-15` / `g++-15` with `-O3 -flto -fno-semantic-interposition` and `-flto`. The base image remains `trixie`; the Dockerfile adds Debian unstable with low apt priority only to install the requested GCC 15 toolchain. For `grpc 1.58.0`, `-include cstdint` is added to `CXXFLAGS`.
+- `pecl`: standard PECL build using the PHP image toolchain.
+- `optimized-amd64-skylake`: `amd64` only, built with `gcc-15` / `g++-15` and `-O3 -flto -fno-semantic-interposition -march=skylake`. The base image remains `trixie`; the Dockerfile adds Debian unstable with low apt priority only to install the requested GCC 15 toolchain. For `grpc 1.58.0`, `-include cstdint` is added to `CXXFLAGS`.
+
+`arm64` publishes only the `pecl` profile. Historical `optimized` tags from the initial artifact layout are not part of the current tag policy.
 
 ## Publishing
 
@@ -66,7 +67,7 @@ Use `grpc_version=all` in `publish.yml` only for an intentional manual backfill 
 ## Usage
 
 ```dockerfile
-FROM ghcr.io/dkkoma/ext-grpc-artifacts:1.58.0-php8.4-trixie-amd64-optimized AS ext-grpc
+FROM ghcr.io/dkkoma/ext-grpc-artifacts:1.58.0-php8.4-trixie-amd64-optimized-amd64-skylake AS ext-grpc
 FROM php:8.4-fpm-trixie
 
 COPY --from=ext-grpc /artifacts/grpc.so /usr/local/lib/php/extensions/no-debug-non-zts-20240924/grpc.so
@@ -83,9 +84,9 @@ docker buildx build \
   --build-arg GRPC_VERSION=1.80.0 \
   --build-arg PHP_VERSION=8.4 \
   --build-arg DISTRO=trixie \
-  --build-arg PROFILE=pecl \
+  --build-arg PROFILE=optimized-amd64-skylake \
   --target artifact \
-  -t ext-grpc-artifacts:1.80.0-php8.4-trixie-amd64-pecl \
+  -t ext-grpc-artifacts:1.80.0-php8.4-trixie-amd64-optimized-amd64-skylake \
   --load \
   .
 ```

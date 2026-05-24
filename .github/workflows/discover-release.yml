@@ -49,11 +49,13 @@ jobs:
 
           php_versions=("8.4" "8.5")
           arches=("amd64" "arm64")
-          profiles=("pecl" "optimized")
-
           missing=0
           for php_version in "${php_versions[@]}"; do
             for arch in "${arches[@]}"; do
+              profiles=("pecl")
+              if [[ "${arch}" == "amd64" ]]; then
+                profiles+=("optimized-amd64-skylake")
+              fi
               for profile in "${profiles[@]}"; do
                 tag="${IMAGE_NAME}:${grpc_version}-php${php_version}-${DISTRO}-${arch}-${profile}"
                 if ! docker buildx imagetools inspect "${tag}" > /dev/null 2>&1; then

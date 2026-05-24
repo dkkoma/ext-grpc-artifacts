@@ -30,7 +30,11 @@ RUN apt-get update \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN if [[ "${PROFILE}" == "optimized" ]]; then \
+RUN if [[ "${PROFILE}" == "optimized-amd64-skylake" ]]; then \
+        if [[ "${TARGETARCH}" != "amd64" ]]; then \
+            echo "PROFILE=optimized-amd64-skylake requires TARGETARCH=amd64" >&2; \
+            exit 1; \
+        fi; \
         printf 'deb http://deb.debian.org/debian unstable main\n' > /etc/apt/sources.list.d/unstable.list; \
         printf 'Package: *\nPin: release a=unstable\nPin-Priority: 50\n' > /etc/apt/preferences.d/limit-unstable; \
         apt-get update; \
@@ -38,12 +42,12 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-RUN if [[ "${PROFILE}" == "optimized" ]]; then \
+RUN if [[ "${PROFILE}" == "optimized-amd64-skylake" ]]; then \
         export MAKEFLAGS="-j${MAKE_JOBS}"; \
         export CC=gcc-15; \
         export CXX=g++-15; \
-        export CFLAGS="-O3 -flto -fno-semantic-interposition"; \
-        export CXXFLAGS="-O3 -flto -fno-semantic-interposition"; \
+        export CFLAGS="-O3 -flto -fno-semantic-interposition -march=skylake"; \
+        export CXXFLAGS="-O3 -flto -fno-semantic-interposition -march=skylake"; \
         export LDFLAGS="-flto"; \
         if [[ "${GRPC_VERSION}" == "1.58.0" ]]; then \
             export CXXFLAGS="${CXXFLAGS} -include cstdint"; \
@@ -69,8 +73,8 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
     fi; \
     phpize; \
     ./configure --with-php-config="$(command -v php-config)"; \
-    if [[ "${PROFILE}" == "optimized" ]]; then \
-        sed -i 's/-g -O2/-O3 -flto -fno-semantic-interposition/g' Makefile; \
+    if [[ "${PROFILE}" == "optimized-amd64-skylake" ]]; then \
+        sed -i 's/-g -O2/-O3 -flto -fno-semantic-interposition -march=skylake/g' Makefile; \
     fi; \
     find . -type d ! -name .libs -print0 | xargs -0 -I{} mkdir -p "{}/.libs"; \
     make; \
@@ -89,7 +93,7 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
             "distro" => getenv("DISTRO"), \
             "arch" => getenv("TARGETARCH"), \
             "profile" => getenv("PROFILE"), \
-            "compiler" => getenv("PROFILE") === "optimized" ? "gcc-15" : "default php image toolchain", \
+            "compiler" => getenv("PROFILE") === "optimized-amd64-skylake" ? "gcc-15" : "default php image toolchain", \
             "cflags" => getenv("CFLAGS"), \
             "cxxflags" => getenv("CXXFLAGS"), \
             "ldflags" => getenv("LDFLAGS"), \
