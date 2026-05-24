@@ -1,22 +1,15 @@
 name: Publish artifact images
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       grpc_version:
-        description: gRPC version. Leave as "all" for the full matrix.
+        description: gRPC version to publish. Use "all" only for manual backfills.
         required: true
         default: all
-        type: choice
-        options:
-          - all
-          - 1.58.0
-          - 1.80.0
+        type: string
       php_version:
-        description: PHP version. Leave as "all" for the full matrix.
+        description: PHP version. Leave as "all" for all supported versions.
         required: true
         default: all
         type: choice
@@ -25,7 +18,7 @@ on:
           - "8.4"
           - "8.5"
       arch:
-        description: Architecture. Leave as "all" for the full matrix.
+        description: Architecture. Leave as "all" for all supported architectures.
         required: true
         default: all
         type: choice
@@ -34,7 +27,7 @@ on:
           - amd64
           - arm64
       profile:
-        description: Build profile. Leave as "all" for the full matrix.
+        description: Build profile. Leave as "all" for all supported profiles.
         required: true
         default: all
         type: choice
@@ -42,6 +35,11 @@ on:
           - all
           - pecl
           - optimized
+      force:
+        description: Rebuild and push even when the target tag already exists.
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -52,60 +50,116 @@ env:
   DISTRO: trixie
 
 jobs:
+  prepare:
+    name: Prepare build matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      count: ${{ steps.matrix.outputs.count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grpc_input="${{ inputs.grpc_version }}"
+          php_input="${{ inputs.php_version }}"
+          arch_input="${{ inputs.arch }}"
+          profile_input="${{ inputs.profile }}"
+
+          if [[ "${grpc_input}" == "all" ]]; then
+            mapfile -t grpc_versions < <(jq -r '.[]' versions.json)
+          else
+            grpc_versions=("${grpc_input}")
+          fi
+
+          php_versions=("8.4" "8.5")
+          arches=("amd64" "arm64")
+          profiles=("pecl" "optimized")
+
+          matrix='{"include":[]}'
+          for grpc_version in "${grpc_versions[@]}"; do
+            for php_version in "${php_versions[@]}"; do
+              [[ "${php_input}" == "all" || "${php_input}" == "${php_version}" ]] || continue
+              for arch in "${arches[@]}"; do
+                [[ "${arch_input}" == "all" || "${arch_input}" == "${arch}" ]] || continue
+                for profile in "${profiles[@]}"; do
+                  [[ "${profile_input}" == "all" || "${profile_input}" == "${profile}" ]] || continue
+                  matrix="$(
+                    jq -c \
+                      --arg grpc_version "${grpc_version}" \
+                      --arg php_version "${php_version}" \
+                      --arg arch "${arch}" \
+                      --arg profile "${profile}" \
+                      '.include += [{
+                        "grpc-version": $grpc_version,
+                        "php-version": $php_version,
+                        "arch": $arch,
+                        "profile": $profile
+                      }]' \
+                      <<< "${matrix}"
+                  )"
+                done
+              done
+            done
+          done
+
+          count="$(jq '.include | length' <<< "${matrix}")"
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+          echo "count=${count}" >> "${GITHUB_OUTPUT}"
+
   publish:
     name: grpc ${{ matrix.grpc-version }} / php ${{ matrix.php-version }} / ${{ matrix.arch }} / ${{ matrix.profile }}
+    needs: prepare
+    if: needs.prepare.outputs.count != '0'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
-      matrix:
-        grpc-version:
-          - 1.58.0
-          - 1.80.0
-        php-version:
-          - "8.4"
-          - "8.5"
-        arch:
-          - amd64
-          - arm64
-        profile:
-          - pecl
-          - optimized
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
 
     steps:
-      - name: Skip filtered matrix entries
-        id: filter
-        run: |
-          should_run=true
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.grpc_version }}" != "all" && "${{ inputs.grpc_version }}" != "${{ matrix.grpc-version }}" ]]; then should_run=false; fi
-            if [[ "${{ inputs.php_version }}" != "all" && "${{ inputs.php_version }}" != "${{ matrix.php-version }}" ]]; then should_run=false; fi
-            if [[ "${{ inputs.arch }}" != "all" && "${{ inputs.arch }}" != "${{ matrix.arch }}" ]]; then should_run=false; fi
-            if [[ "${{ inputs.profile }}" != "all" && "${{ inputs.profile }}" != "${{ matrix.profile }}" ]]; then should_run=false; fi
-          fi
-          echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
-
       - name: Checkout
-        if: steps.filter.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        if: steps.filter.outputs.should_run == 'true' && matrix.arch == 'arm64' && runner.arch != 'ARM64'
+        if: matrix.arch == 'arm64' && runner.arch != 'ARM64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.filter.outputs.should_run == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: steps.filter.outputs.should_run == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check existing image tag
+        id: tag
+        shell: bash
+        env:
+          TAG: ${{ env.IMAGE_NAME }}:${{ matrix.grpc-version }}-php${{ matrix.php-version }}-${{ env.DISTRO }}-${{ matrix.arch }}-${{ matrix.profile }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ inputs.force }}" == "true" ]]; then
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if docker buildx imagetools inspect "${TAG}" > /dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Build and push artifact
-        if: steps.filter.outputs.should_run == 'true'
+        if: steps.tag.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .

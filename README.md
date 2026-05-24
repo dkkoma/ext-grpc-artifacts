@@ -40,7 +40,7 @@ Each image contains:
 
 ## Matrix
 
-The initial publish matrix is:
+The manually tracked backfill matrix in `versions.json` is:
 
 | Dimension | Values |
 | --- | --- |
@@ -54,6 +54,14 @@ Profiles:
 
 - `pecl`: standard `pecl install grpc-${GRPC_VERSION}` build using the PHP image toolchain.
 - `optimized`: `gcc-15` / `g++-15` with `-O3 -flto -fno-semantic-interposition` and `-flto`. The base image remains `trixie`; the Dockerfile adds Debian unstable with low apt priority only to install the requested GCC 15 toolchain. For `grpc 1.58.0`, `-include cstdint` is added to `CXXFLAGS`.
+
+## Publishing
+
+`publish.yml` is a manual workflow. Pass a specific `grpc_version` to publish only that gRPC release across the supported PHP, architecture, distro, and profile matrix. The workflow checks the expected GHCR tag before building and skips matrix entries that already exist unless `force` is enabled.
+
+`discover-release.yml` runs every 6 hours and checks the latest PECL `grpc` stable release. If any expected tag for that release is missing from GHCR, it dispatches `publish.yml` for that gRPC version only. Previous gRPC versions are not rebuilt by the scheduled workflow.
+
+Use `grpc_version=all` in `publish.yml` only for an intentional manual backfill of the versions listed in `versions.json`.
 
 ## Usage
 
