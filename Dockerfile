@@ -9,6 +9,7 @@ ARG PHP_VERSION=8.4
 ARG DISTRO=trixie
 ARG PROFILE=pecl
 ARG TARGETARCH
+ARG MAKE_JOBS=4
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
@@ -38,7 +39,7 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
     fi
 
 RUN if [[ "${PROFILE}" == "optimized" ]]; then \
-        export MAKEFLAGS="-j$(nproc)"; \
+        export MAKEFLAGS="-j${MAKE_JOBS}"; \
         export CC=gcc-15; \
         export CXX=g++-15; \
         export CFLAGS="-O3 -flto -fno-semantic-interposition"; \
@@ -48,14 +49,32 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
             export CXXFLAGS="${CXXFLAGS} -include cstdint"; \
         fi; \
     else \
-        export MAKEFLAGS="-j$(nproc)"; \
+        export MAKEFLAGS="-j${MAKE_JOBS}"; \
         export CC="$(command -v gcc)"; \
         export CXX="$(command -v g++)"; \
         export CFLAGS=""; \
         export CXXFLAGS=""; \
         export LDFLAGS=""; \
     fi; \
-    pecl install "grpc-${GRPC_VERSION}"; \
+    mkdir -p /tmp/grpc-src; \
+    cd /tmp/grpc-src; \
+    pecl download "grpc-${GRPC_VERSION}"; \
+    tar -xf "grpc-${GRPC_VERSION}.tgz"; \
+    cd "grpc-${GRPC_VERSION}"; \
+    if [[ "${GRPC_VERSION}" == "1.58.0" ]]; then \
+        find src/php/ext/grpc -type f -name '*.c' -print0 \
+            | xargs -0 sed -i 's/zend_exception_get_default(TSRMLS_C)/zend_ce_exception/g'; \
+        sed -i '1i#include <cstdint>' \
+            third_party/abseil-cpp/absl/container/internal/container_memory.h; \
+    fi; \
+    phpize; \
+    ./configure --with-php-config="$(command -v php-config)"; \
+    if [[ "${PROFILE}" == "optimized" ]]; then \
+        sed -i 's/-g -O2/-O3 -flto -fno-semantic-interposition/g' Makefile; \
+    fi; \
+    find . -type d ! -name .libs -print0 | xargs -0 -I{} mkdir -p "{}/.libs"; \
+    make; \
+    make install; \
     extension_dir="$(php-config --extension-dir)"; \
     mkdir -p /artifacts; \
     cp "${extension_dir}/grpc.so" /artifacts/grpc.so; \

@@ -92,7 +92,7 @@ php -d extension=/artifacts/grpc.so --ri grpc
 php -r 'var_dump(class_exists("Grpc\\Channel"));'
 ```
 
-The build exports `MAKEFLAGS=-j$(nproc)` so PECL compilation can use the CPUs available to the Docker builder.
+The build exports `MAKEFLAGS=-j4` by default. Override the `MAKE_JOBS` build arg if a builder can safely use a different level of parallelism.
 
 ## License and source
 
