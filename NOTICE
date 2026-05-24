@@ -1,0 +1,12 @@
+ext-grpc-artifacts
+Copyright 2026 Daisuke Koma
+
+This repository builds and redistributes binary artifact images for the
+PHP grpc extension from the PECL grpc package.
+
+The grpc extension is part of the upstream gRPC project.
+
+PECL package: https://pecl.php.net/package/grpc
+Upstream source: https://github.com/grpc/grpc
+Upstream license: Apache License 2.0
+

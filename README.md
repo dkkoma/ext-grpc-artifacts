@@ -32,9 +32,11 @@ Each image contains:
 ```text
 /artifacts/grpc.so
 /artifacts/metadata.json
+/licenses/APACHE-2.0.txt
+/licenses/NOTICE
 ```
 
-`metadata.json` records the gRPC version, PHP minor version, PHP extension directory, distro, architecture, build profile, compiler flags, build timestamp, and PECL source string.
+`metadata.json` records the gRPC version, PHP minor version, PHP extension directory, distro, architecture, build profile, compiler flags, build timestamp, source URLs, license, and license file paths.
 
 ## Matrix
 
@@ -100,4 +102,4 @@ The artifact is built from the PECL `grpc` package, which is published from the 
 - Upstream source: <https://github.com/grpc/grpc>
 - Upstream license: Apache License 2.0
 
-This repository's build files are licensed under the MIT License. The generated `grpc.so` artifacts retain the upstream gRPC licensing terms.
+This repository and the generated artifact images are distributed under the Apache License 2.0. The generated `grpc.so` artifacts are built from upstream gRPC/PECL grpc and retain the upstream Apache License 2.0 terms. Each artifact image includes `/licenses/APACHE-2.0.txt` and `/licenses/NOTICE`.

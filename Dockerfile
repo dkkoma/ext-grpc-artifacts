@@ -12,6 +12,9 @@ ARG TARGETARCH
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
+COPY LICENSE /licenses/APACHE-2.0.txt
+COPY NOTICE /licenses/NOTICE
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         autoconf \
@@ -73,6 +76,10 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
             "ldflags" => getenv("LDFLAGS"), \
             "built_at" => gmdate("c"), \
             "source" => "pecl grpc-" . getenv("GRPC_VERSION"), \
+            "source_url" => "https://pecl.php.net/package/grpc", \
+            "upstream_url" => "https://github.com/grpc/grpc", \
+            "license" => "Apache-2.0", \
+            "license_files" => ["/licenses/APACHE-2.0.txt", "/licenses/NOTICE"], \
         ]; \
         file_put_contents("/artifacts/metadata.json", json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL); \
     '; \
@@ -80,3 +87,4 @@ RUN if [[ "${PROFILE}" == "optimized" ]]; then \
 
 FROM scratch AS artifact
 COPY --from=builder /artifacts /artifacts
+COPY --from=builder /licenses /licenses
