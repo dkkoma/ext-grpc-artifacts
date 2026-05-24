@@ -1,0 +1,53 @@
+name: Cleanup legacy artifact tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print legacy tags without deleting them.
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cleanup:
+    name: Delete legacy optimized tags
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete legacy optimized package versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE_NAME: ext-grpc-artifacts
+          DRY_RUN: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          versions="$(
+            gh api --paginate "/users/${OWNER}/packages/container/${PACKAGE_NAME}/versions" \
+              --jq '.[] | {id, tags: .metadata.container.tags}'
+          )"
+
+          delete_count=0
+          while IFS= read -r version; do
+            id="$(jq -r '.id' <<< "${version}")"
+            mapfile -t tags < <(jq -r '.tags[]?' <<< "${version}")
+
+            for tag in "${tags[@]}"; do
+              if [[ "${tag}" =~ -optimized$ ]]; then
+                echo "Legacy tag: ${tag} (version id ${id})"
+                if [[ "${DRY_RUN}" != "true" ]]; then
+                  gh api --method DELETE "/users/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${id}"
+                fi
+                delete_count=$((delete_count + 1))
+                break
+              fi
+            done
+          done <<< "${versions}"
+
+          echo "Matched legacy package versions: ${delete_count}"
